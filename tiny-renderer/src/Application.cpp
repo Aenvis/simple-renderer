@@ -64,7 +64,7 @@ void DrawLine(Vector2 p0, Vector2 p1, TGAImage& image, const TGAColor& color) {
 	}
 }
 int main() {
-	Model* model = new Model("obj/model.obj");
+	Model* model = new Model("models/model.obj");
 
 	TGAImage image(IMAGE_WIDTH, IMAGE_HEIGHT, TGAImage::RGB);
 
