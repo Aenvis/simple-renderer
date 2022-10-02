@@ -1,4 +1,5 @@
-﻿#include "tgaimage.h"
+﻿#include <iostream>
+#include "tgaimage.h"
 #include "Model.h"
 #include "Geometry.h"
 #define IMAGE_WIDTH 800			
@@ -56,43 +57,65 @@ void DrawLine(Vector2i p0, Vector2i p1, TGAImage& image, const TGAColor& color) 
 	}
 }
 
-void DrawTriangle(Vector2i p0, Vector2i p1, Vector2i p2, TGAImage& image, const TGAColor& color)
+Vector3f barycentricCoordinates(Vector2i* points, Vector2i p)
 {
-	//sort vertices in ascending y order
-	if (p0.y > p1.y) std::swap(p0, p1);
-	if (p0.y > p2.y) std::swap(p0, p2);
-	if (p1.y > p2.y) std::swap(p1, p2);
-	 
-	int totalHeight = p2.y - p0.y;
+	Vector3f a(points[2].x - points[0].x, points[1].x - points[0].x, points[0].x - p.x);
+	Vector3f b(points[2].y - points[0].y, points[1].y - points[0].y, points[0].y - p.y);
+	Vector3f u = a ^ b;
 
-	for(int y = 0; y <= totalHeight; y++)
+	if (std::abs(u.z) < 1) return Vector3f(-1.0f, 1.0f, 1.0f);
+	return Vector3f(1.0f - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
+}
+
+void DrawTriangle(Vector2i* points, TGAImage& image, const TGAColor& color)
+{
+	Vector2i boundingBoxMin(image.get_width() - 1, image.get_height() - 1);
+	Vector2i boundingBoxMax(0, 0);
+	Vector2i clamp(image.get_width() - 1, image.get_height() - 1);
+
+	for (size_t i = 0; i < 3; i++)
 	{
-		bool isSecondHalf = y > p1.y - p0.y || p1.y == p0.y;
-		
-		int segmentHeight = isSecondHalf ? p2.y - p1.y : p1.y - p0.y;
-		float alpha = (float)y / totalHeight;
-		float beta = (float)(y - (isSecondHalf ? p1.y - p0.y : 0)) / segmentHeight;
-	
-		Vector2i _p0 = p0 + (p2 - p0) * alpha;
-		Vector2i _p1 = isSecondHalf ? p1 + (p2 - p1) * beta : p0 + (p1 - p0) * beta;
-		
-		if (_p0.x > _p1.x)
-			std::swap(_p0, _p1);
-		for (size_t i = _p0.x; i < _p1.x; i++)
-			image.set_pixel_color(i, p0.y+y, color);
+		boundingBoxMin.x = std::max(0, std::min(boundingBoxMin.x, points[i].x));
+		boundingBoxMin.y = std::max(0, std::min(boundingBoxMin.y, points[i].y));
+
+		boundingBoxMax.x = std::min(clamp.x, std::max(boundingBoxMax.x, points[i].x));
+		boundingBoxMax.y = std::min(clamp.y, std::max(boundingBoxMax.y, points[i].y));
+	}
+	Vector2i p;
+	for (p.x = boundingBoxMin.x; p.x <= boundingBoxMax.x; p.x++)
+	{
+		for (p.y = boundingBoxMin.y; p.y <= boundingBoxMax.y; p.y++)
+		{
+			Vector3f barycentricOnScreen = barycentricCoordinates(points, p);
+			if (barycentricOnScreen.x < 0 || barycentricOnScreen.y < 0 || barycentricOnScreen.z < 0) continue;
+			image.set_pixel_color(p.x, p.y, color);
+		}
 	}
 }
 
 int main() 
 {
-	Vector2i t0[3] = { Vector2i(50, 50), Vector2i(200, 100), Vector2i(100, 600)};
-	Vector2i t1[3] = { Vector2i(700, 100), Vector2i(500, 623), Vector2i(699, 500)};
-	Vector2i t2[3] = { Vector2i(400, 400), Vector2i(500, 320), Vector2i(399, 600)};
+	Model* model = new Model("models/model.obj");
+	Vector3f lightDir(0.f, 0.f, -1.f); 
 	TGAImage image(IMAGE_WIDTH, IMAGE_HEIGHT, TGAImage::RGB);
 
-	DrawTriangle(t0[0], t0[1], t0[2], image, red);
-	DrawTriangle(t2[0], t2[1], t2[2], image, green);
-	DrawTriangle(t1[0], t1[1], t1[2], image, white);
+	for (size_t i = 0; i < model->numberOfFaces(); i++)
+	{
+		std::vector<int> face = model->GetFace(i);
+		Vector2i screenCoordinates[3];
+		Vector3f worldCoordinates[3];
+		for (size_t j = 0; j < 3; j++)
+		{
+			worldCoordinates[j] = model->GetFaceVertices(face[j]);
+			screenCoordinates[j] = Vector2i((worldCoordinates[j].x + 1.0f) * IMAGE_WIDTH / 2.0f, (worldCoordinates[j].y + 1.0f) * IMAGE_HEIGHT / 2.0f);
+		}
+		Vector3f normalVector = Vector3f(worldCoordinates[2] - worldCoordinates[0]) ^ Vector3f(worldCoordinates[1] - worldCoordinates[0]);
+		normalVector.normalize();
+
+		float intensity = normalVector * lightDir;
+
+		if(intensity > 0) DrawTriangle(screenCoordinates, image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255));
+	}
 
 	image.flip_vertically(); // to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");
