@@ -56,7 +56,7 @@ void DrawLine(Vector2i p0, Vector2i p1, TGAImage& image, const TGAColor& color) 
 	}
 }
 
-void DrawTriangle(Vector2i p0, Vector2i p1, Vector2i p2, TGAImage& image)
+void DrawTriangle(Vector2i p0, Vector2i p1, Vector2i p2, TGAImage& image, const TGAColor& color)
 {
 	//sort vertices in ascending y order
 	if (p0.y > p1.y) std::swap(p0, p1);
@@ -65,15 +65,21 @@ void DrawTriangle(Vector2i p0, Vector2i p1, Vector2i p2, TGAImage& image)
 	 
 	int totalHeight = p2.y - p0.y;
 
-	for(int y = p0.y; y <= p1.y; y++)
+	for(int y = 0; y <= totalHeight; y++)
 	{
-		int segmentHeight = p1.y - p0.y + 1;
-		float alpha = (float)(y - p0.y) / totalHeight;
-		float beta = (float)(y - p0.y) / segmentHeight;
+		bool isSecondHalf = y > p1.y - p0.y || p1.y == p0.y;
+		
+		int segmentHeight = isSecondHalf ? p2.y - p1.y : p1.y - p0.y;
+		float alpha = (float)y / totalHeight;
+		float beta = (float)(y - (isSecondHalf ? p1.y - p0.y : 0)) / segmentHeight;
+	
 		Vector2i _p0 = p0 + (p2 - p0) * alpha;
-		Vector2i _p1 = p0 + (p1 - p0) * beta;
-		image.set_pixel_color(_p0.x, y, red);
-		image.set_pixel_color(_p1.x, y, green);
+		Vector2i _p1 = isSecondHalf ? p1 + (p2 - p1) * beta : p0 + (p1 - p0) * beta;
+		
+		if (_p0.x > _p1.x)
+			std::swap(_p0, _p1);
+		for (size_t i = _p0.x; i < _p1.x; i++)
+			image.set_pixel_color(i, p0.y+y, color);
 	}
 }
 
@@ -84,9 +90,9 @@ int main()
 	Vector2i t2[3] = { Vector2i(400, 400), Vector2i(500, 320), Vector2i(399, 600)};
 	TGAImage image(IMAGE_WIDTH, IMAGE_HEIGHT, TGAImage::RGB);
 
-	DrawTriangle(t0[0], t0[1], t0[2], image);
-	DrawTriangle(t2[0], t2[1], t2[2], image);
-	DrawTriangle(t1[0], t1[1], t1[2], image);
+	DrawTriangle(t0[0], t0[1], t0[2], image, red);
+	DrawTriangle(t2[0], t2[1], t2[2], image, green);
+	DrawTriangle(t1[0], t1[1], t1[2], image, white);
 
 	image.flip_vertically(); // to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");
