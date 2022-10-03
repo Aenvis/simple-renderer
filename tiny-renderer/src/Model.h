@@ -14,4 +14,3 @@ public:
 	Vector3f GetFaceVertices(int id);
 	std::vector<int> GetFace(int id);
 };
-

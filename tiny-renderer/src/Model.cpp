@@ -56,4 +56,3 @@ std::vector<int> Model::GetFace(int idx) {
 Vector3f Model::GetFaceVertices(int i) {
     return m_vertices[i];
 }
-
