@@ -3,7 +3,7 @@
 #include "Model.h"
 #include "Geometry.h"
 #define SCREEN_WIDTH 800			
-#define SCREEN_HEIGHT 500
+#define SCREEN_HEIGHT 800
 
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
@@ -58,7 +58,7 @@ void DrawLine(Vector2i p0, Vector2i p1, TGAImage& image, const TGAColor& color) 
 	}
 }
 
-Vector3f barycentricCoordinates(Vector2i* points, Vector2i p)
+Vector3f barycentricCoordinates(Vector3f* points, Vector3f p)
 {
 	Vector3f a(points[2].x - points[0].x, points[1].x - points[0].x, points[0].x - p.x);
 	Vector3f b(points[2].y - points[0].y, points[1].y - points[0].y, points[0].y - p.y);
@@ -68,64 +68,75 @@ Vector3f barycentricCoordinates(Vector2i* points, Vector2i p)
 	return Vector3f(1.0f - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
 }
 
-void DrawTriangle(Vector2i* points, TGAImage& image, const TGAColor& color)
+void DrawTriangle(Vector3f* points, float* zbuffer, TGAImage& image, const TGAColor& color)
 {
-	Vector2i boundingBoxMin(image.get_width() - 1, image.get_height() - 1);
-	Vector2i boundingBoxMax(0, 0);
-	Vector2i clamp(image.get_width() - 1, image.get_height() - 1);
+	Vector2f boundingBoxMin(INT_MAX, INT_MAX);
+	Vector2f boundingBoxMax(INT_MIN, INT_MIN);
+	Vector2f clamp(image.get_width() - 1, image.get_height() - 1);
 
 	for (size_t i = 0; i < 3; i++)
 	{
-		boundingBoxMin.x = std::max(0, std::min(boundingBoxMin.x, points[i].x));
-		boundingBoxMin.y = std::max(0, std::min(boundingBoxMin.y, points[i].y));
+		boundingBoxMin.x = std::max(0.f, std::min(boundingBoxMin.x, points[i].x));
+		boundingBoxMin.y = std::max(0.f, std::min(boundingBoxMin.y, points[i].y));
 
 		boundingBoxMax.x = std::min(clamp.x, std::max(boundingBoxMax.x, points[i].x));
 		boundingBoxMax.y = std::min(clamp.y, std::max(boundingBoxMax.y, points[i].y));
 	}
-	Vector2i p;
+	Vector3f p;
 	for (p.x = boundingBoxMin.x; p.x <= boundingBoxMax.x; p.x++)
 	{
 		for (p.y = boundingBoxMin.y; p.y <= boundingBoxMax.y; p.y++)
 		{
 			Vector3f barycentricOnScreen = barycentricCoordinates(points, p);
 			if (barycentricOnScreen.x < 0 || barycentricOnScreen.y < 0 || barycentricOnScreen.z < 0) continue;
-			image.set_pixel_color(p.x, p.y, color);
+			p.z = 0;
+			for (size_t i = 0; i < 3; i++) p.z += points[i].z * barycentricOnScreen[i];
+			if (zbuffer[int(p.x + p.y * SCREEN_WIDTH)] < p.z)
+			{
+				zbuffer[int(p.x + p.y * SCREEN_WIDTH)] = p.z;
+				image.set_pixel_color(p.x, p.y, color);
+			}
 		}
 	}
 }
 
-void rasterize(Vector2i p0, Vector2i p1, TGAImage& image, const TGAColor& color, int* ybuffer)
-{
-	if (p0.x > p1.x) std::swap(p0, p1);
-
-	for (int x = p0.x; x < p1.x; x++)
-	{
-		float t = (x - p0.x) / (float)(p1.x - p0.x);
-		int y = p0.y * (1.0f - t) + p1.y * t;
-		if (y > ybuffer[x])
-		{
-			ybuffer[x] = y;
-			for(size_t i = 0; i < SCREEN_HEIGHT; i++)
-			image.set_pixel_color(x, i, color);
-		}
-	}
+Vector3f world2screen(Vector3f v) {
+	return Vector3f(int((v.x + 1.) * SCREEN_WIDTH / 2. + .5), int((v.y + 1.) * SCREEN_HEIGHT / 2. + .5), v.z);
 }
 
 int main()
 {
-	TGAImage render(SCREEN_WIDTH, 16, TGAImage::RGB);
+	Model* model = new Model("models/model.obj");
+	Vector3f lightDir(0.f, 0.f, -1.f);
+	TGAImage image(SCREEN_WIDTH, SCREEN_HEIGHT, TGAImage::RGB);
 
-	int ybuffer[SCREEN_WIDTH];
-	for (size_t i = 0; i < SCREEN_WIDTH; i++)
+	float* zbuffer = new float[SCREEN_WIDTH * SCREEN_HEIGHT];
+
+	for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++)
 	{
-		ybuffer[i] = INT_MIN;
+		zbuffer[i] = INT_MIN;
 	}
 
-	rasterize({20, 34}, {744, 400}, render, red, ybuffer);
-	rasterize({120, 434}, {444, 400}, render, green, ybuffer);
-	rasterize({330, 463}, {594, 200}, render, blue, ybuffer);
+	for (size_t i = 0; i < model->numberOfFaces(); i++)
+	{
+		std::vector<int> face = model->GetFace(i);
+		Vector3f points[3];
+		for (size_t j = 0; j < 3; j++)
+		{
+			points[i] = world2screen(model->GetFaceVertices(face[i]));
+		}
+		Vector3f normalVector = Vector3f(points[2] - points[0]) ^ Vector3f(points[1] - points[0]);
+/*		normalVector.normalize();
 
-	render.flip_vertically(); // to have the origin at the left bottom corner of the image
-	render.write_tga_file("output.tga");
+		float intensity = normalVector * lightDir;
+
+		if (intensity > 0) DrawTriangle(points, zbuffer, image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255));
+	*/}
+
+	image.flip_vertically(); // to have the origin at the left bottom corner of the image
+	image.write_tga_file("output.tga");
+
+	delete model;
+	delete[] zbuffer;
 }
 
