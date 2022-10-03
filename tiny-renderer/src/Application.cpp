@@ -121,17 +121,19 @@ int main()
 	{
 		std::vector<int> face = model->GetFace(i);
 		Vector3f points[3];
+		Vector3f worldCoordinates[3];
 		for (size_t j = 0; j < 3; j++)
 		{
-			points[i] = world2screen(model->GetFaceVertices(face[i]));
+			worldCoordinates[j] = model->GetFaceVertices(face[j]);
+			points[j] = world2screen(model->GetFaceVertices(face[j]));
 		}
-		Vector3f normalVector = Vector3f(points[2] - points[0]) ^ Vector3f(points[1] - points[0]);
-/*		normalVector.normalize();
+		Vector3f normalVector = Vector3f(worldCoordinates[2] - worldCoordinates[0]) ^ Vector3f(worldCoordinates[1] - worldCoordinates[0]);
+		normalVector.normalize();
 
 		float intensity = normalVector * lightDir;
 
 		if (intensity > 0) DrawTriangle(points, zbuffer, image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255));
-	*/}
+	}
 
 	image.flip_vertically(); // to have the origin at the left bottom corner of the image
 	image.write_tga_file("output.tga");
