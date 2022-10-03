@@ -2,12 +2,13 @@
 #include "tgaimage.h"
 #include "Model.h"
 #include "Geometry.h"
-#define IMAGE_WIDTH 800			
-#define IMAGE_HEIGHT 800
+#define SCREEN_WIDTH 800			
+#define SCREEN_HEIGHT 500
 
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
 const TGAColor green = TGAColor(0, 255, 0, 255);
+const TGAColor blue = TGAColor(0, 0, 255, 255);
 
 void DrawLine(Vector2i p0, Vector2i p1, TGAImage& image, const TGAColor& color) {
 	bool steep = false;
@@ -93,31 +94,38 @@ void DrawTriangle(Vector2i* points, TGAImage& image, const TGAColor& color)
 	}
 }
 
-int main() 
+void rasterize(Vector2i p0, Vector2i p1, TGAImage& image, const TGAColor& color, int* ybuffer)
 {
-	Model* model = new Model("models/model.obj");
-	Vector3f lightDir(0.f, 0.f, -1.f); 
-	TGAImage image(IMAGE_WIDTH, IMAGE_HEIGHT, TGAImage::RGB);
+	if (p0.x > p1.x) std::swap(p0, p1);
 
-	for (size_t i = 0; i < model->numberOfFaces(); i++)
+	for (int x = p0.x; x < p1.x; x++)
 	{
-		std::vector<int> face = model->GetFace(i);
-		Vector2i screenCoordinates[3];
-		Vector3f worldCoordinates[3];
-		for (size_t j = 0; j < 3; j++)
+		float t = (x - p0.x) / (float)(p1.x - p0.x);
+		int y = p0.y * (1.0f - t) + p1.y * t;
+		if (y > ybuffer[x])
 		{
-			worldCoordinates[j] = model->GetFaceVertices(face[j]);
-			screenCoordinates[j] = Vector2i((worldCoordinates[j].x + 1.0f) * IMAGE_WIDTH / 2.0f, (worldCoordinates[j].y + 1.0f) * IMAGE_HEIGHT / 2.0f);
+			ybuffer[x] = y;
+			for(size_t i = 0; i < SCREEN_HEIGHT; i++)
+			image.set_pixel_color(x, i, color);
 		}
-		Vector3f normalVector = Vector3f(worldCoordinates[2] - worldCoordinates[0]) ^ Vector3f(worldCoordinates[1] - worldCoordinates[0]);
-		normalVector.normalize();
+	}
+}
 
-		float intensity = normalVector * lightDir;
+int main()
+{
+	TGAImage render(SCREEN_WIDTH, 16, TGAImage::RGB);
 
-		if(intensity > 0) DrawTriangle(screenCoordinates, image, TGAColor(intensity * 255, intensity * 255, intensity * 255, 255));
+	int ybuffer[SCREEN_WIDTH];
+	for (size_t i = 0; i < SCREEN_WIDTH; i++)
+	{
+		ybuffer[i] = INT_MIN;
 	}
 
-	image.flip_vertically(); // to have the origin at the left bottom corner of the image
-	image.write_tga_file("output.tga");
+	rasterize({20, 34}, {744, 400}, render, red, ybuffer);
+	rasterize({120, 434}, {444, 400}, render, green, ybuffer);
+	rasterize({330, 463}, {594, 200}, render, blue, ybuffer);
+
+	render.flip_vertically(); // to have the origin at the left bottom corner of the image
+	render.write_tga_file("output.tga");
 }
 
